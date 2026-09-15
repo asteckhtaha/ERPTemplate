@@ -1,0 +1,38 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# .NET
+**/bin/
+**/obj/
+
+# Angular
+**/node_modules/
+**/dist/
+**/.angular/
+
+# Logs
+**/*.log
+**/logs/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# ASP.NET local settings
+appsettings.Development.json
+
+# Visual Studio Code
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test results
+TestResults/
+
+# Publish
+**/publish/
