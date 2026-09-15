@@ -1,0 +1,6 @@
+/* ERPTemplate theme layer: maps design tokens to real CSS custom properties and
+   global element/utility styles (body, headings, form controls, scrollbars...).
+
+   Rules (DEVELOPMENT-GUIDELINES.md, section 25):
+   - component-specific styling stays in the component's own .scss file;
+   - only global, app-wide styling belongs here. */

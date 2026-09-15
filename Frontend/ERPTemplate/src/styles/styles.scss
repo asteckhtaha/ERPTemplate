@@ -1,0 +1,10 @@
+/* ==========================================================================
+   ERPTemplate — global stylesheet entry point.
+   Import order matters; keep it small and rely on component styles.
+   Loaded through angular.json (`stylePreprocessorOptions.includePaths: ["src/styles"]`),
+   so partials can be used with `@use 'variables';` etc.
+   ========================================================================== */
+
+@use 'variables';
+@use 'theme';
+@use 'mixins';

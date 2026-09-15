@@ -1,38 +1,67 @@
-# Visual Studio
+# =============================================================================
+# ERPTemplate — root .gitignore
+# One file for both applications (.NET + Angular) and IDE/OS noise.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# .NET / Visual Studio
+# -----------------------------------------------------------------------------
 .vs/
 *.user
 *.suo
-
-# .NET
+*.userosscache
+*.sln.docstates
 **/bin/
 **/obj/
+**/publish/
+TestResults/
+*.coverage
+*.coveragexml
 
-# Angular
+# -----------------------------------------------------------------------------
+# Angular / Node
+# -----------------------------------------------------------------------------
 **/node_modules/
 **/dist/
+**/bazel-out/
 **/.angular/
+**/.sass-cache/
+**/out-tsc/
+**/coverage/
+npm-debug.log*
+yarn-error.log*
 
+# -----------------------------------------------------------------------------
 # Logs
+# -----------------------------------------------------------------------------
 **/*.log
 **/logs/
 
-# Environment / secrets
+# -----------------------------------------------------------------------------
+# Secrets & environment
+# NEVER commit connection strings, passwords, JWT keys or certificates.
+# -----------------------------------------------------------------------------
 .env
 .env.*
 !.env.example
-
-# ASP.NET local settings
 appsettings.Development.json
+appsettings.*.Local.json
+*.pfx
+*.p12
+secrets.json
 
-# Visual Studio Code
+# -----------------------------------------------------------------------------
+# IDEs / editors
+# -----------------------------------------------------------------------------
+.idea/
 .vscode/
+!.vscode/extensions.json
+.history/
+*.sublime-workspace
 
+# -----------------------------------------------------------------------------
 # OS files
+# -----------------------------------------------------------------------------
 .DS_Store
 Thumbs.db
-
-# Test results
-TestResults/
-
-# Publish
-**/publish/
+desktop.ini
