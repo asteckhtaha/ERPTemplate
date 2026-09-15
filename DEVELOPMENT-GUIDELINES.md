@@ -1311,6 +1311,7 @@ Copy this checklist into the pull request / task and tick every line before requ
 | 2026-09-15 | Global SCSS in `src/styles/` (tokens + theme), SCSS for component styles | Consistent visual system; overridable design tokens |
 | 2026-09-15 | Root `.editorconfig` and a single root `.gitignore` | One formatting/ignore baseline for both applications |
 | 2026-09-15 | Structure **LOCKED** (this document, §3–§6) | Prevent silent architecture drift; changes need approval and a guideline update |
+| 2026-09-15 | Database schema delivered as ordered idempotent scripts `Data/Scripts/01_Tables.sql` → `02_ForeignKeys.sql` → `03_Indexes.sql` → `04_Constraints.sql` (+ `05_Seed.sql` when seed values are approved) | Implements the approved schema §11.7 (scripts in git, per update); 44 tables, 190 FKs, 90 indexes, 2 CHECK constraints. Open items are tracked in `docs/DATABASE-SCHEMA-REVIEW.md` (§5) and are not implemented until approved |
 
 ---
 
