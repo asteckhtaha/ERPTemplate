@@ -1,121 +1,98 @@
-using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 
-namespace ERPTemplate.API.Helpers
+namespace ERPTemplate.API.Helpers;
+
+/// <summary>
+/// JWT token generation only. No login/permission/tenant business logic.
+/// </summary>
+public sealed class TokenHelper
 {
-    /// <summary>
-    /// JWT access-token creation only.
-    /// Signing key, issuer, audience and lifetime come from configuration (<c>Jwt</c> section) — nothing
-    /// is hardcoded and no secret is stored in this class.
-    /// <para>
-    /// It creates the token; it never decides whether a user may perform an operation (that is
-    /// <see cref="PermissionHelper"/> plus the API's authorization pipeline), and it does no database work.
-    /// </para>
-    /// <para>Thread-safe: the signing key/credentials are immutable after construction.</para>
-    /// </summary>
-    public sealed class TokenHelper
+    private readonly IConfiguration _configuration;
+
+    public TokenHelper(IConfiguration configuration)
     {
-        /// <summary>
-        /// Required keys: <c>Jwt:Key</c>, <c>Jwt:Issuer</c>, <c>Jwt:Audience</c>.
-        /// Optional: <c>Jwt:AccessTokenMinutes</c> (default 30).
-        /// </summary>
-        public const string AccessTokenMinutesKey = "Jwt:AccessTokenMinutes";
-
-        /// <summary>HS256 requires a key of at least 256 bits (32 bytes).</summary>
-        public const int MinimumSigningKeyBytes = 32;
-
-        private const int DefaultAccessTokenMinutes = 30;
-
-        private readonly string _issuer;
-        private readonly string _audience;
-        private readonly SigningCredentials _signingCredentials;
-        private readonly int _accessTokenMinutes;
-
-        /// <exception cref="InvalidOperationException">Thrown when JWT configuration is missing or the signing key is too short.</exception>
-        public TokenHelper(IConfiguration configuration)
-        {
-            ArgumentNullException.ThrowIfNull(configuration);
-
-            var signingKey = configuration["Jwt:Key"];
-            if (string.IsNullOrWhiteSpace(signingKey))
-            {
-                throw new InvalidOperationException("Configuration 'Jwt:Key' is not set.");
-            }
-
-            var signingKeyBytes = Encoding.UTF8.GetBytes(signingKey);
-            if (signingKeyBytes.Length < MinimumSigningKeyBytes)
-            {
-                throw new InvalidOperationException(
-                    $"'Jwt:Key' must be at least {MinimumSigningKeyBytes} bytes (256 bits) for HS256 signing.");
-            }
-
-            _issuer = configuration["Jwt:Issuer"]
-                ?? throw new InvalidOperationException("Configuration 'Jwt:Issuer' is not set.");
-            _audience = configuration["Jwt:Audience"]
-                ?? throw new InvalidOperationException("Configuration 'Jwt:Audience' is not set.");
-
-            var configuredMinutes = configuration.GetValue<int?>(AccessTokenMinutesKey);
-            _accessTokenMinutes = configuredMinutes is > 0 ? configuredMinutes.Value : DefaultAccessTokenMinutes;
-
-            _signingCredentials = new SigningCredentials(
-                new SymmetricSecurityKey(signingKeyBytes), SecurityAlgorithms.HmacSha256);
-        }
-
-        /// <summary>Configured access-token lifetime in minutes (used to persist session expiry).</summary>
-        public int AccessTokenMinutes => _accessTokenMinutes;
-
-        /// <summary>
-        /// Creates a signed access token for the supplied authenticated context.
-        /// Claims written here are read back by <see cref="TenantHelper"/> /
-        /// <see cref="SecurityHelper"/> using <see cref="SecurityHelper.AppClaims"/>, so the JWT bearer
-        /// setup must not remap inbound claim names (set <c>MapInboundClaims = false</c>).
-        /// </summary>
-        public TokenResult GenerateAccessToken(TenantContext context)
-        {
-            ArgumentNullException.ThrowIfNull(context);
-
-            var issuedAtUtc = DateTimeHelper.UtcNow;
-            var expiresUtc = issuedAtUtc.AddMinutes(_accessTokenMinutes);
-
-            var claims = new List<Claim>
-            {
-                new(SecurityHelper.AppClaims.UserId, context.UserId.ToString(CultureInfo.InvariantCulture)),
-                new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N"))
-            };
-
-            if (!string.IsNullOrWhiteSpace(context.UserName))
-            {
-                claims.Add(new Claim(SecurityHelper.AppClaims.UserName, context.UserName));
-            }
-
-            AddClaim(claims, SecurityHelper.AppClaims.CompanyId, context.CompanyId);
-            AddClaim(claims, SecurityHelper.AppClaims.BranchId, context.BranchId);
-            AddClaim(claims, SecurityHelper.AppClaims.RoleId, context.RoleId);
-            AddClaim(claims, SecurityHelper.AppClaims.UserTypeId, context.UserTypeId);
-
-            var token = new JwtSecurityToken(
-                issuer: _issuer,
-                audience: _audience,
-                claims: claims,
-                notBefore: issuedAtUtc,
-                expires: expiresUtc,
-                signingCredentials: _signingCredentials);
-
-            return new TokenResult(new JwtSecurityTokenHandler().WriteToken(token), expiresUtc);
-        }
-
-        private static void AddClaim(ICollection<Claim> claims, string claimType, int? value)
-        {
-            if (value.HasValue)
-            {
-                claims.Add(new Claim(claimType, value.Value.ToString(CultureInfo.InvariantCulture)));
-            }
-        }
-
-        /// <summary>Issued access token plus its UTC expiry (for <c>UserSessions.ExpiryDate</c>).</summary>
-        public sealed record TokenResult(string AccessToken, DateTime ExpiresUtc);
+        _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
     }
+
+    public string GenerateToken(TokenClaims claims, TimeSpan? lifetime = null)
+    {
+        ArgumentNullException.ThrowIfNull(claims);
+
+        var section = _configuration.GetSection("JwtSettings");
+
+        var key = section["SecretKey"] ?? section["Key"]
+            ?? throw new InvalidOperationException("JWT signing key is not configured (JwtSettings:SecretKey).");
+
+        var issuer = section["Issuer"];
+        var audience = section["Audience"];
+
+        var expiryMinutes = TryGetInt(section["ExpiryMinutes"])
+            ?? TryGetInt(section["DurationInMinutes"])
+            ?? 60;
+
+        var effectiveLifetime = lifetime ?? TimeSpan.FromMinutes(expiryMinutes);
+
+        var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
+        var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
+
+        var tokenClaims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, claims.UserId.ToString()),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new("UserID", claims.UserId.ToString())
+        };
+
+        if (!string.IsNullOrWhiteSpace(claims.UserName))
+        {
+            tokenClaims.Add(new Claim(JwtRegisteredClaimNames.UniqueName, claims.UserName));
+            tokenClaims.Add(new Claim(ClaimTypes.Name, claims.UserName));
+        }
+
+        if (claims.CompanyId.HasValue)
+        {
+            tokenClaims.Add(new Claim("CompanyID", claims.CompanyId.Value.ToString()));
+        }
+
+        if (claims.BranchId.HasValue)
+        {
+            tokenClaims.Add(new Claim("BranchID", claims.BranchId.Value.ToString()));
+        }
+
+        if (claims.RoleId.HasValue)
+        {
+            tokenClaims.Add(new Claim("RoleID", claims.RoleId.Value.ToString()));
+        }
+
+        if (claims.UserTypeId.HasValue)
+        {
+            tokenClaims.Add(new Claim("UserTypeID", claims.UserTypeId.Value.ToString()));
+        }
+
+        var now = DateTime.UtcNow;
+
+        var token = new JwtSecurityToken(
+            issuer: issuer,
+            audience: audience,
+            claims: tokenClaims,
+            notBefore: now,
+            expires: now.Add(effectiveLifetime),
+            signingCredentials: credentials);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    private static int? TryGetInt(string? value)
+        => int.TryParse(value, out var result) ? result : null;
 }
+
+public sealed record TokenClaims(
+    int UserId,
+    string? UserName,
+    int? CompanyId = null,
+    int? BranchId = null,
+    int? RoleId = null,
+    int? UserTypeId = null);
